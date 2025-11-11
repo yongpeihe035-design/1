@@ -63,7 +63,7 @@ wandb_log = False  # disabled by default
 wandb_project = "owt"
 wandb_run_name = "gpt2"  # 'run' + str(time.time())
 # data
-dataset = "shakespeare"
+dataset = "openwebtext"
 gradient_accumulation_steps = 5 * 8  # used to simulate larger batch sizes
 batch_size = 12  # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
@@ -75,7 +75,7 @@ dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 # adamw optimizer
 learning_rate = 6e-4  # max learning rate
-max_iters = 500  # total number of training iterations to run with ndtimeline tracing
+max_iters = 10  # total number of training iterations to run with ndtimeline tracing
 ndtimeline_flush_interval = max_iters  # number of iterations to batch into one ndtimeline dump
 weight_decay = 1e-1
 beta1 = 0.9
@@ -95,11 +95,11 @@ dtype = (
 )  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True  # use PyTorch 2.0 to compile the model to be faster
 use_DO = True
-dp_size = 2
+dp_size = 4
 tp_size = 1
 DDP_grads_in_fp32 = True
 save_checkpoint_path = "./nanogpt_checkpoint_dir"
-load_checkpoint_path = ''
+load_checkpoint_path = ""
 use_dist_dropout = True
 async_checkpoint = False
 broadcast_checkpoint = False
@@ -122,16 +122,6 @@ def main():
         device = f"cuda:{local_rank}"
         torch.cuda.set_device(device)
         init_process_group(backend=backend, world_size=world_size, rank=rank)
-        world_size_env = int(os.environ.get("WORLD_SIZE", world_size))
-        local_world_size_env = int(os.environ.get("LOCAL_WORLD_SIZE", 0) or 0)
-        
-        print(f"[DIAG] env WORLD_SIZE={world_size_env}, LOCAL_WORLD_SIZE={local_world_size_env}, "
-              f"rank={rank}, local_rank={local_rank}, configured dp_size={dp_size}, tp_size={tp_size}")
-        
-        # enforce consistency: dp_size * tp_size MUST equal world_size
-        if world_size_env != dp_size * tp_size:
-            raise RuntimeError(f"Inconsistent mesh sizes: WORLD_SIZE={world_size_env} != dp_size*tp_size ({dp_size*tp_size}). "
-                               "Please set dp_size * tp_size == number of processes started by torchrun.")
         # + + + VeScale API below
         VESCALE_DEVICE_MESH.init_device_mesh(device, (1, dp_size, tp_size), mesh_dim_names=["PP", "DP", "TP"])
         mesh = VESCALE_DEVICE_MESH.get()
